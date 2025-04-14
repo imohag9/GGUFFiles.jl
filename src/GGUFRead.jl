@@ -117,19 +117,9 @@ function read_gguf_tensor_info(io::IO)
     return GGUFTensorInfo(name, n_dimensions, dimensions, type, offset)
 end
 
-"""
-    read_gguf(io::IO)
 
-Reads the entire GGUF file from an IO stream.
+# Reads the entire GGUF file from an IO stream.
 
-# Arguments
-- `io::IO`: The IO stream to read from.
-
-# Returns
-- `header::GGUFHeader`: The GGUF header.
-- `metadata_kv::Vector{GGUFMetadataKV}`: The metadata key-value pairs.
-- `tensor_info::Vector{GGUFTensorInfo}`: The tensor information.
-"""
 function read_gguf(io::IO)
     header = read_gguf_header(io)
     metadata_kv = Vector{GGUFMetadataKV}(undef, header.metadata_kv_count)
