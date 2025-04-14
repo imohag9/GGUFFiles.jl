@@ -1,0 +1,3 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+GGUFFiles = "64b78412-f075-48b3-a385-7ef9f8f02b20"
