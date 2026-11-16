@@ -1,13 +1,24 @@
 name = "GGUFFiles"
 uuid = "64b78412-f075-48b3-a385-7ef9f8f02b20"
 authors = ["imohag9 <souidi.hamza90@gmail.com> and contributors"]
-version = "0.1.0"
+version = "0.1.1"
+
+[deps]
+Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [compat]
-julia = "1.6.7"
+Adapt = "4"
+LinearAlgebra = "1"
+KernelAbstractions = "0.9, 0.10"
+Mmap = "1"
+julia = "1.10"
 
 [extras]
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test"]
+test = ["Random", "Test"]

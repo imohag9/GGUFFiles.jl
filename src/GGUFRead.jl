@@ -76,21 +76,41 @@ function read_gguf_value(io::IO, value_type::GGUFValueType)
     elseif value_type == GGUF_TYPE_FLOAT64
         data = read(io, Float64)
     elseif value_type == GGUF_TYPE_ARRAY
-        data = []
-        begin
-            arrtype = GGUFValueType(read(io, UInt32))
-
-            len = Int(read(io, Int64))
+        arrtype = GGUFValueType(read(io, UInt32))
+        len = Int(read(io, Int64))
+        T = _gguf_scalar_type(arrtype)
+        if T !== nothing
+            # numeric arrays (token types, scores, ...) are read in one go
+            data = Vector{T}(undef, len)
+            read!(io, data)
+        elseif arrtype == GGUF_TYPE_STRING
+            data = Vector{String}(undef, len)
             for i in 1:len
-                push!(data,read_gguf_value(io, arrtype))
+                data[i] = String(read(io, read(io, UInt64)))
             end
-
-
+        else
+            data = Any[read_gguf_value(io, arrtype) for _ in 1:len]
         end
     else
         error("Unknown GGUF value type: ", value_type)
     end
     return data
+end
+
+# Julia type of a fixed-size GGUF value type, `nothing` for strings and arrays.
+function _gguf_scalar_type(t::GGUFValueType)
+    t == GGUF_TYPE_UINT8 && return UInt8
+    t == GGUF_TYPE_INT8 && return Int8
+    t == GGUF_TYPE_UINT16 && return UInt16
+    t == GGUF_TYPE_INT16 && return Int16
+    t == GGUF_TYPE_UINT32 && return UInt32
+    t == GGUF_TYPE_INT32 && return Int32
+    t == GGUF_TYPE_FLOAT32 && return Float32
+    t == GGUF_TYPE_BOOL && return Bool
+    t == GGUF_TYPE_UINT64 && return UInt64
+    t == GGUF_TYPE_INT64 && return Int64
+    t == GGUF_TYPE_FLOAT64 && return Float64
+    return nothing
 end
 
 """

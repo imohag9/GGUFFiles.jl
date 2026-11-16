@@ -1,4 +1,5 @@
-const GGUF_MAGIC = 0x47475546
+# The bytes "GGUF" read as a little-endian UInt32.
+const GGUF_MAGIC = 0x46554747
 
 # GGUF Version
 const GGUF_VERSION = 3
