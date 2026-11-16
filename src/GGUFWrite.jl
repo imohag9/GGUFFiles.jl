@@ -24,7 +24,7 @@ Writes a metadata key-value pair to an IO stream.
 - `metadata_kv::GGUFMetadataKV`: The metadata key-value pair to write.
 """
 function write_gguf_metadata_kv(io::IO, metadata_kv::GGUFMetadataKV)
-    write(io, UInt64(length(metadata_kv.key)))
+    write(io, UInt64(sizeof(metadata_kv.key)))
     write(io, metadata_kv.key)
     write(io, UInt32(metadata_kv.value_type))
     write_gguf_value(io, metadata_kv.value, metadata_kv.value_type)
@@ -58,13 +58,15 @@ function write_gguf_value(io::IO, value::Any, value_type::GGUFValueType)
     elseif value_type == GGUF_TYPE_BOOL
         write(io, Bool(value))
     elseif value_type == GGUF_TYPE_STRING
-        write(io, UInt64(length(value)))
+        write(io, UInt64(sizeof(value)))
         write(io, value)
     elseif value_type == GGUF_TYPE_ARRAY
-        write(io, UInt32(typeof(value[1])))
+        et = eltype(value) !== Any ? gguf_value_type(eltype(value)) :
+             isempty(value) ? GGUF_TYPE_UINT8 : gguf_value_type(typeof(first(value)))
+        write(io, UInt32(et))
         write(io, UInt64(length(value)))
         for v in value
-            write_gguf_value(io, v, GGUFValueType(typeof(v)))
+            write_gguf_value(io, v, et)
         end
     elseif value_type == GGUF_TYPE_UINT64
         write(io, UInt64(value))
@@ -87,7 +89,7 @@ Writes tensor information to an IO stream.
 - `tensor_info::GGUFTensorInfo`: The tensor information to write.
 """
 function write_gguf_tensor_info(io::IO, tensor_info::GGUFTensorInfo)
-    write(io, UInt64(length(tensor_info.name)))
+    write(io, UInt64(sizeof(tensor_info.name)))
     write(io, tensor_info.name)
     write(io, UInt32(tensor_info.n_dimensions))
     for dimension in tensor_info.dimensions
@@ -125,3 +127,60 @@ function create_gguf(file_path::String, header::GGUFHeader, metadata_kv::Vector{
     close(io)
 end
 export create_gguf, write_gguf_header, write_gguf_metadata_kv, write_gguf_value, write_gguf_tensor_info
+
+"""
+    gguf_value_type(T::Type) -> GGUFValueType
+
+GGUF metadata value type used to store a Julia value of type `T`.
+"""
+gguf_value_type(::Type{UInt8}) = GGUF_TYPE_UINT8
+gguf_value_type(::Type{Int8}) = GGUF_TYPE_INT8
+gguf_value_type(::Type{UInt16}) = GGUF_TYPE_UINT16
+gguf_value_type(::Type{Int16}) = GGUF_TYPE_INT16
+gguf_value_type(::Type{UInt32}) = GGUF_TYPE_UINT32
+gguf_value_type(::Type{Int32}) = GGUF_TYPE_INT32
+gguf_value_type(::Type{Float32}) = GGUF_TYPE_FLOAT32
+gguf_value_type(::Type{Bool}) = GGUF_TYPE_BOOL
+gguf_value_type(::Type{<:AbstractString}) = GGUF_TYPE_STRING
+gguf_value_type(::Type{UInt64}) = GGUF_TYPE_UINT64
+gguf_value_type(::Type{Int64}) = GGUF_TYPE_INT64
+gguf_value_type(::Type{Float64}) = GGUF_TYPE_FLOAT64
+gguf_value_type(::Type{<:AbstractVector}) = GGUF_TYPE_ARRAY
+
+"""
+    write_gguf(path, metadata::AbstractDict, tensors; alignment=32)
+
+Write a complete GGUF file, tensor data included. `metadata` maps keys to
+values (numbers, strings, or vectors of them; the value type follows the
+Julia type). `tensors` is a collection of [`GGUFTensor`](@ref)s, or of
+`(name, type, dims, bytes)` tuples, whose bytes are already encoded in `type`.
+"""
+function write_gguf(path::AbstractString, metadata::AbstractDict, tensors; alignment::Integer=GGUF_DEFAULT_ALIGNMENT)
+    ts = [t isa GGUFTensor ? (t.name, t.type, t.dims, t.data) : t for t in tensors]
+    md = Dict{String,Any}(metadata)
+    alignment != GGUF_DEFAULT_ALIGNMENT && (md["general.alignment"] = UInt32(alignment))
+    infos = GGUFTensorInfo[]
+    offset = 0
+    for (name, type, dims, bytes) in ts
+        nb = tensor_nbytes(type, dims)
+        length(bytes) == nb || error("GGUFFiles: tensor $name has $(length(bytes)) bytes, expected $nb")
+        push!(infos, GGUFTensorInfo(name, length(dims), UInt64.(collect(dims)), type, offset))
+        offset = cld(offset + nb, alignment) * alignment
+    end
+    kvs = [GGUFMetadataKV(k, gguf_value_type(typeof(v)), v) for (k, v) in sort!(collect(md); by=first)]
+    open(path, "w") do io
+        write_gguf(io, GGUFHeader(GGUF_MAGIC, GGUF_VERSION, length(infos), length(kvs)), kvs, infos)
+        _pad!(io, alignment)
+        start = position(io)
+        for ((_, _, _, bytes), info) in zip(ts, infos)
+            write(io, zeros(UInt8, start + Int(info.offset) - position(io)))
+            write(io, collect(UInt8, bytes))
+        end
+        _pad!(io, alignment)
+    end
+    return path
+end
+
+_pad!(io, alignment) = write(io, zeros(UInt8, cld(position(io), alignment) * alignment - position(io)))
+
+export write_gguf, gguf_value_type

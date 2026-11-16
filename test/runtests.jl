@@ -58,7 +58,10 @@ using Test
             @test isGGUFFile("dummy_gguf_file") == false
 
         end
-        
+
 
 end
+
+    include("reference_dequant.jl")
+    include("tensors.jl")
 end
